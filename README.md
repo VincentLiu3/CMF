@@ -1,8 +1,8 @@
 # Collective Matrix Factorization
 This is an implmentation of Collective Matrix Factorization using Newton methond to minimize objective loss.
 
-# Input Data Format
-Each relation is stored as a matrix in coordinate format. That is, it has three columns: row, col, value.
+# Data Format
+Each relation is stored as a matrix in coordinate format. That is, it has three columns: row, col, value. For example, 
 ```
 3944,2641,2
 4644,2015,3
@@ -11,7 +11,13 @@ Each relation is stored as a matrix in coordinate format. That is, it has three 
 
 # Quick Usage
 ```
-$ Python3 cmf.py
+$ python3 cmf.py --alphas '0.8-0.1-0.1' --k 10 --reg 0.1 --lr 0.1
+```
+You can type **"$ python3 cmf.py --help"** for more details about the parameters.  
+
+# Grid Search
+```
+$ python3 grid.py
 ```
 
 # Reference 
