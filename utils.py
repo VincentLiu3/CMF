@@ -9,14 +9,17 @@ def loadTripleData(filename, nrow=0, ncol=0):
 	'''
 	laod triple data (row, column, value) to csc_matrix format
 	'''
-	fData = numpy.loadtxt(filename, delimiter=',')
-	fData = fData.T
+	if filename == '':
+		return None
+	else:
+		fData = numpy.loadtxt(filename, delimiter=',')
+		fData = fData.T
 
-	num_row = max(int(fData[0].max())+1, nrow)
-	num_col = max(int(fData[1].max())+1, ncol)
-	fData = scipy.sparse.coo_matrix((fData[2],(fData[0],fData[1])), shape=(num_row, num_col))
-	fData = scipy.sparse.csc_matrix(fData)
-	return(fData)
+		num_row = max(int(fData[0].max())+1, nrow)
+		num_col = max(int(fData[1].max())+1, ncol)
+		fData = scipy.sparse.coo_matrix((fData[2],(fData[0],fData[1])), shape=(num_row, num_col))
+		fData = scipy.sparse.csc_matrix(fData)
+		return(fData)
 
 def read_data(dataset_name):
 	X_train = loadData('data/%s/train.txt' % (dataset_name))
@@ -40,10 +43,9 @@ def read_binary_data(dataset_name):
 
 	return [Xs_trn, Xs_tst]
 
-def read_triple_data(dataset_name):
-	file_path = 'data/{}'.format(dataset_name)
-	Dtrain = loadData('{}/train.txt'.format(file_path)).T
-	Dtest = loadData('{}/test.txt'.format(file_path)).T
+def read_triple_data(train, test, user, item):
+	Dtrain = loadData(train).T
+	Dtest = loadData(test).T
 
 	# to avoid training and testing data with different shapes
 	num_user = int(max(Dtrain[0].max(), Dtest[0].max())) + 1
@@ -54,8 +56,8 @@ def read_triple_data(dataset_name):
 	X_train = scipy.sparse.csc_matrix(X_train)
 	X_test = scipy.sparse.csc_matrix(X_test)
 
-	X_userFeat = loadTripleData('{}/user_binary.txt'.format(file_path), num_user, 0)
-	X_itemFeat = loadTripleData('{}/item_binary.txt'.format(file_path), num_item, 0)
+	X_userFeat = loadTripleData(user, num_user, 0)
+	X_itemFeat = loadTripleData(item, num_item, 0)
 
 	Xs_trn = [X_train, X_userFeat, X_itemFeat]
 	Xs_tst = [X_test, None, None]
@@ -111,3 +113,14 @@ def check_modes(modes):
 	for mode in modes:
 		if mode != 'sparse' and mode != 'dense' and mode != 'log_dense':
 			assert False, "Unrecognized mode: {}".format(mode)
+
+def string2list(input_string, num, sep='-'):
+	string_list = input_string.split(sep)
+	assert( len(string_list) == num ), 'argument a must be the same length as numbers of relations.'
+	return [float(x) for x in string_list]
+
+def save_result(args, rmse):
+	if args.verbose == 1:
+		print('[CMF] Saving result to {}'.format(args.save))
+	with open(args.save, 'a') as fp_w:
+		fp_w.write('{},{},{},{},{},{:.4f}\n'.format(args.k, args.reg, args.lr, args.tol, args.alphas, rmse))
