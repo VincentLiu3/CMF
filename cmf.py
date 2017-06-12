@@ -1,7 +1,3 @@
-'''
-Collective Matrix Factorization
-2017 May
-'''
 import numpy
 import time
 import scipy.sparse
@@ -10,20 +6,18 @@ from anewton import logistic, newton_update
 from utils import *
 
 def parse_args():
-    # python3 cmf.py --alphas '0.8-0.1-0.1' --k 10 --reg 0.1 --lr 0.1 --tol 1.0 --verbose 1
     parser = argparse.ArgumentParser(description = 'Collective Matrix Factorization')
-    parser.add_argument('--train' , type = str, default = 'data/ml-1m/train.txt', help = 'Training file')
-    parser.add_argument('--test' , type = str, default = 'data/ml-1m/test.txt', help = 'Testing file')
-    parser.add_argument('--user' , type = str, default = 'data/ml-1m/user.txt', help = 'User features (Optional)')
-    parser.add_argument('--item' , type = str, default = 'data/ml-1m/item.txt', help = 'Item features (Optional)')
-    parser.add_argument('--save', type = str, default = 'result.txt', help = 'File where fianl result will be saved')
-    
-    parser.add_argument('--alphas' , type = str, default = '0.8-0.1-0.1', help = 'Alpha in [0, 1] weights the relative importance of relations')
-    
+    parser.add_argument('--train' , type = str, default = '', help = 'Training file')
+    parser.add_argument('--test' , type = str, default = '', help = 'Testing file')
+    parser.add_argument('--user' , type = str, default = '', help = 'User features')
+    parser.add_argument('--item' , type = str, default = '', help = 'Item features')
+    parser.add_argument('--out', type = str, default = '', help = 'File where fianl result will be saved')
+
+    parser.add_argument('--alphas' , type = str, default = '0.4-0.3-0.3', help = 'Alpha in [0, 1] weights the relative importance of relations')
     parser.add_argument('--k', type = int, default = 10, help = 'Dimension of latent fectors')
     parser.add_argument('--reg', type = float, default = 0.1, help = 'Regularization for latent facotrs')
     parser.add_argument('--lr', type = float, default = 0.1, help = 'Initial learning rate for training')
-    
+
     parser.add_argument('--max_iter', type = int, default = 100, help = 'Max training iteration')
     parser.add_argument('--tol', type = float, default = 0.5, help = 'Tolerant for change in training loss')
     parser.add_argument('--verbose', type = int, default = 1, help = 'Verbose or not')
@@ -34,6 +28,7 @@ def learn(Xs, Xstst, rc_schema, modes, alphas, K, reg, learn_rate, max_iter, tol
     assert(numpy.all(rc_schema[:, 0] != rc_schema[:, 1])) # should not have symmetric relations
     assert(rc_schema.shape[0] == len(alphas))
     assert(rc_schema.shape[0] == len(modes))
+    check_modes(modes) 
 
     Xts = [None] * len(Xs)
     for i in range(len(Xs)):
@@ -65,15 +60,15 @@ def learn(Xs, Xstst, rc_schema, modes, alphas, K, reg, learn_rate, max_iter, tol
         prev_loss = training_loss
 
         if verbose == 1:
+            # Ystst = predict(Us, Xstst, rc_schema, modes)
+            # testing_loss = RMSE(Xstst[0], Ystst[0])
             toc = time.time()
-            Ystst = predict(Us, Xstst, rc_schema, modes)
-            testing_loss = RMSE(Xstst[0], Ystst[0])
             print("[CMF] Iteration {}/{}. Time: {:.1f}".format(i, max_iter, toc - tic))
-            print("[CMF] Training Loss: {:.2f} (change {:.2f}%). Testing RMSE: {:.2f}".format(training_loss, change_rate, testing_loss))
-
+            print("[CMF] Training Loss: {:.2f} (change {:.2f}%)".format(training_loss, change_rate))
+            # print("[CMF] Testing RMSE: {:.2f}".format(testing_loss))
+            
+        # early stop
         if change_rate < tol and i != 1:
-            if verbose == 1:
-                print("[CMF] Early stopping due to insufficient change in training loss!")
             break
 
     return Us
@@ -166,46 +161,34 @@ def run_cmf(Xs_trn, Xs_tst, rc_schema, modes, args):
     run cmf and return rmse
     '''
     alphas = string2list(args.alphas, len(modes))
+
     if args.verbose == 1:
         start_time = time.time()
         print('[Settings] k = {}. reg = {}. lr = {}. alpha = {}'.format(args.k, args.reg, args.lr, alphas))
-    
-    # training
+
     Us = learn(Xs_trn, Xs_tst, rc_schema, modes, alphas, args.k, args.reg, args.lr, args.max_iter, args.tol, args.verbose)
-    # Evaluation
     Ys_tst = predict(Us, Xs_tst, rc_schema, modes)
     rmse = RMSE(Xs_tst[0], Ys_tst[0])
 
     if args.verbose == 1:
         end_time = time.time()
-        print('[Results] Total Running Time: {:.0f} seconds'.format(end_time - start_time) )
-    
+        print('[Results] k = {}. reg = {}. lr = {}. alpha = {}'.format(args.k, args.reg, args.lr, alphas))
+        print('[Results] RMSE = {:.4f}'.format(rmse))
+        print('[Results] Total Running Time: {:.0f} s'.format(end_time - start_time) )
+
     return rmse
-    
+
 
 if __name__ == "__main__":
     args = parse_args()
-    [Xs_trn, Xs_tst] = read_triple_data(args.train, args.test, args.user, args.item)
+    [Xs_trn, Xs_tst, rc_schema, modes] = read_triple_data(args.train, args.test, args.user, args.item)
 
-    #### Need to modify this part for your own dataset ####
-    rc_schema = numpy.array([[0, 1], [0, 2], [1, 3]])
-    # [row entity number, column entity number]
-    # 0=user, 1=item, 2=userFeat, 3=itemFeat
-
-    modes = ['sparse', 'log_dense', 'log_dense']
-    check_modes(modes)
-    # modes of each relation: sparse, dense or log_dense
-    # dense if Wij = 1 for all ij 
-    # sparse if Wij = 1 if Xij>0
-    # log if link function = logistic
-
-    if args.verbose == 1:
+    if args.verbose == 1: 
         [S, Ns] = get_config(Xs_trn, rc_schema)
-        print('[Data] Number of relations = {}'.format(len(Xs_trn)))
+        print('------------------- CMF -------------------')
         print('[Data] Number of instnace for each entity = {}'.format(Ns))
         print('[Data] Training size = {}. Testing size = {}'.format(Xs_trn[0].size, Xs_tst[0].size))
 
     rmse = run_cmf(Xs_trn, Xs_tst, rc_schema, modes, args)
-    print('[Results] RMSE = {:.4f}'.format(rmse))
     save_result(args, rmse)
     

@@ -1,5 +1,6 @@
 import numpy
 import scipy.sparse
+import os.path
 
 def loadData(filename):
 	fData = numpy.loadtxt(filename, delimiter = ',')
@@ -9,17 +10,14 @@ def loadTripleData(filename, nrow=0, ncol=0):
 	'''
 	laod triple data (row, column, value) to csc_matrix format
 	'''
-	if filename == '':
-		return None
-	else:
-		fData = numpy.loadtxt(filename, delimiter=',')
-		fData = fData.T
+	fData = numpy.loadtxt(filename, delimiter=',')
+	fData = fData.T
 
-		num_row = max(int(fData[0].max())+1, nrow)
-		num_col = max(int(fData[1].max())+1, ncol)
-		fData = scipy.sparse.coo_matrix((fData[2],(fData[0],fData[1])), shape=(num_row, num_col))
-		fData = scipy.sparse.csc_matrix(fData)
-		return(fData)
+	num_row = max(int(fData[0].max())+1, nrow)
+	num_col = max(int(fData[1].max())+1, ncol)
+	fData = scipy.sparse.coo_matrix((fData[2],(fData[0],fData[1])), shape=(num_row, num_col))
+	fData = scipy.sparse.csc_matrix(fData)
+	return(fData)
 
 def read_data(dataset_name):
 	X_train = loadData('data/%s/train.txt' % (dataset_name))
@@ -44,10 +42,12 @@ def read_binary_data(dataset_name):
 	return [Xs_trn, Xs_tst]
 
 def read_triple_data(train, test, user, item):
+	'''
+	read data from three column format (row, column, value)
+	'''
 	Dtrain = loadData(train).T
 	Dtest = loadData(test).T
-
-	# to avoid training and testing data with different shapes
+	# to make sure training and testing data with the same shapes
 	num_user = int(max(Dtrain[0].max(), Dtest[0].max())) + 1
 	num_item = int(max(Dtrain[1].max(), Dtest[1].max())) + 1
 	X_train = scipy.sparse.coo_matrix((Dtrain[2],(Dtrain[0],Dtrain[1])), shape=(num_user, num_item))
@@ -56,13 +56,52 @@ def read_triple_data(train, test, user, item):
 	X_train = scipy.sparse.csc_matrix(X_train)
 	X_test = scipy.sparse.csc_matrix(X_test)
 
-	X_userFeat = loadTripleData(user, num_user, 0)
-	X_itemFeat = loadTripleData(item, num_item, 0)
+	# user or item features
+	if user != '' and item != '':
+		X_userFeat = loadTripleData(user, num_user, 0)
+		X_itemFeat = loadTripleData(item, num_item, 0)
 
-	Xs_trn = [X_train, X_userFeat, X_itemFeat]
-	Xs_tst = [X_test, None, None]
+		Xs_trn = [X_train, X_userFeat, X_itemFeat]
+		Xs_tst = [X_test, None, None]
+		
+		rc_schema = numpy.array([[0, 1], [0, 2], [1, 3]])
+		# [row entity number, column entity number]
+		# 0=user, 1=item, 2=userFeat, 3=itemFeat
 
-	return [Xs_trn, Xs_tst] 
+		modes = ['sparse', 'log_dense', 'log_dense']
+		# modes of each relation: sparse, dense or log_dense
+	    # dense if Wij = 1 for all ij 
+	    # sparse if Wij = 1 if Xij>0
+	    # log if link function = logistic
+
+	elif user == '' and item != '':
+		X_itemFeat = loadTripleData(item, num_item, 0)
+
+		Xs_trn = [X_train, X_itemFeat]
+		Xs_tst = [X_test, None]
+
+		rc_schema = numpy.array([[0, 1], [1, 2]])
+		# [row entity number, column entity number]
+		# 0=user, 1=item, 2=itemFeat
+
+		modes = ['sparse', 'log_dense']
+
+	elif user != '' and item == '':
+		X_userFeat = loadTripleData(user, num_user, 0)
+
+		Xs_trn = [X_train, X_userFeat]
+		Xs_tst = [X_test, None]
+
+		rc_schema = numpy.array([[0, 1], [0, 2]])
+		# [row entity number, column entity number]
+		# 0=user, 1=item, 2=userFeat
+
+		modes = ['sparse', 'log_dense']
+
+	elif user == '' and item == '':
+		assert False, "No user and item features. Please use LibMF."
+
+	return [Xs_trn, Xs_tst, rc_schema, modes] 
 
 def get_config(Xs, rc_schema):
     '''
@@ -70,7 +109,7 @@ def get_config(Xs, rc_schema):
     S = number of entity
     Ns = number of instances for each entity
     '''
-    assert(len(Xs)==len(rc_schema)), "get_config: rc_schema lenth must be the same as input data."
+    assert(len(Xs)==len(rc_schema)), "rc_schema lenth must be the same as input data."
     
     S = rc_schema.max() + 1
     Ns = -1 * numpy.ones(S, int)
@@ -83,12 +122,12 @@ def get_config(Xs, rc_schema):
         if Ns[ri] < 0:
             Ns[ri] = m
         else:
-            assert(Ns[ri] == m), "get_config: rc_schema does not match data."
+            assert(Ns[ri] == m), "rc_schema does not match data."
                             
         if Ns[ci] < 0:
             Ns[ci] = n
         else:
-            assert(Ns[ci] == n), "get_config: rc_schema does not match data."
+            assert(Ns[ci] == n), "rc_schema does not match data."
     return [S, Ns]
 
 def RMSE(X, Y):
@@ -116,11 +155,22 @@ def check_modes(modes):
 
 def string2list(input_string, num, sep='-'):
 	string_list = input_string.split(sep)
-	assert( len(string_list) == num ), 'argument a must be the same length as numbers of relations.'
+	assert( len(string_list) == num ), 'argument alphas must be the same length as numbers of relations.'
 	return [float(x) for x in string_list]
 
 def save_result(args, rmse):
-	if args.verbose == 1:
-		print('[CMF] Saving result to {}'.format(args.save))
-	with open(args.save, 'a') as fp_w:
-		fp_w.write('{},{},{},{},{},{:.4f}\n'.format(args.k, args.reg, args.lr, args.tol, args.alphas, rmse))
+	if args.user != '' and args.item != '':
+		cmf_type = 'useritem'
+	elif args.user == '' and args.item != '':
+		cmf_type = 'item'
+	elif args.user != '' and args.item == '':
+		cmf_type = 'user'
+
+	if args.out != '':
+		if os.path.exists(args.out) == True:
+			with open(args.out, 'a') as fp:
+				fp.write('{},{},{},{},{},{},{:.4f}\n'.format(cmf_type, args.k, args.reg, args.lr, args.tol, args.alphas, rmse))
+		else:
+			with open(args.out, 'w') as fp:
+				fp.write('type,k,reg,lr,tol,alphas,RMSE\n')
+				fp.write('{},{},{},{},{},{},{:.4f}\n'.format(cmf_type, args.k, args.reg, args.lr, args.tol, args.alphas, rmse))
