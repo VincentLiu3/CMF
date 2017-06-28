@@ -2,23 +2,6 @@ import numpy
 import scipy.sparse
 import os.path
 
-def loadData(filename):
-	fData = numpy.loadtxt(filename, delimiter = ',')
-	return(fData)
-
-def loadTripleData(filename, nrow=0, ncol=0):
-	'''
-	laod triple data (row, column, value) to csc_matrix format
-	'''
-	fData = numpy.loadtxt(filename, delimiter=',')
-	fData = fData.T
-
-	num_row = max(int(fData[0].max())+1, nrow)
-	num_col = max(int(fData[1].max())+1, ncol)
-	fData = scipy.sparse.coo_matrix((fData[2],(fData[0],fData[1])), shape=(num_row, num_col))
-	fData = scipy.sparse.csc_matrix(fData)
-	return(fData)
-
 def read_data(dataset_name):
 	X_train = loadData('data/%s/train.txt' % (dataset_name))
 	X_userFeat = loadData('data/%s/user.txt' % (dataset_name))
@@ -30,26 +13,50 @@ def read_data(dataset_name):
 
 	return [Xs_trn, Xs_tst]
 
-def read_binary_data(dataset_name):
-	X_train = loadData('data/%s/train.txt' % (dataset_name))
-	X_userFeat = loadData('data/%s/user_binary.txt' % (dataset_name))
-	X_itemFeat = loadData('data/%s/item_binary.txt' % (dataset_name))
-	X_test = loadData('data/%s/test.txt' % (dataset_name))
+def loadData(filename):
+	fData = numpy.loadtxt(filename, delimiter = ',')
+	return(fData)
 
-	Xs_trn = [X_train, X_userFeat, X_itemFeat]
-	Xs_tst = [X_test, None, None]
+def loadTripleData(filename):
+	'''
+	laod triple data (row, column, value) to csc_matrix format
+	'''
+	fData = numpy.loadtxt(filename, delimiter=',')
+	fData = fData.T
+	fData = scipy.sparse.coo_matrix((fData[2],(fData[0],fData[1])))
+	fData = scipy.sparse.csc_matrix(fData)
+	return(fData)
 
-	return [Xs_trn, Xs_tst]
+'''
+def loadTripleData(filename, nrow=0, ncol=0):
+	fData = numpy.loadtxt(filename, delimiter=',')
+	fData = fData.T
 
-def read_triple_data(train, test, user, item):
+	num_row = max(int(fData[0].max())+1, nrow)
+	num_col = max(int(fData[1].max())+1, ncol)
+	fData = scipy.sparse.coo_matrix((fData[2],(fData[0],fData[1])), shape=(num_row, num_col))
+	fData = scipy.sparse.csc_matrix(fData)
+	return(fData)
+'''
+
+def read_triple_data(train, test, user, item, feature_mat_type):
 	'''
 	read data from three column format (row, column, value)
 	'''
+
+	# need to make sure training & testing data with the same shapes as user and item features
+	num_user = num_item = 0
+	if user != '':
+		X_userFeat = loadTripleData(user)
+		num_user = X_userFeat.shape[0]
+	if item != '':
+		X_itemFeat = loadTripleData(item)
+		num_item = X_itemFeat.shape[0]
+
 	Dtrain = loadData(train).T
 	Dtest = loadData(test).T
-	# to make sure training and testing data with the same shapes
-	num_user = int(max(Dtrain[0].max(), Dtest[0].max())) + 1
-	num_item = int(max(Dtrain[1].max(), Dtest[1].max())) + 1
+	num_user = int( max(Dtrain[0].max(), Dtest[0].max(), num_user-1) ) + 1
+	num_item = int( max(Dtrain[1].max(), Dtest[1].max(), num_item-1) ) + 1
 	X_train = scipy.sparse.coo_matrix((Dtrain[2],(Dtrain[0],Dtrain[1])), shape=(num_user, num_item))
 	X_test = scipy.sparse.coo_matrix((Dtest[2],(Dtest[0],Dtest[1])), shape=(num_user, num_item))
 	# transform to csc format
@@ -58,9 +65,6 @@ def read_triple_data(train, test, user, item):
 
 	# user or item features
 	if user != '' and item != '':
-		X_userFeat = loadTripleData(user, num_user, 0)
-		X_itemFeat = loadTripleData(item, num_item, 0)
-
 		Xs_trn = [X_train, X_userFeat, X_itemFeat]
 		Xs_tst = [X_test, None, None]
 		
@@ -68,15 +72,13 @@ def read_triple_data(train, test, user, item):
 		# [row entity number, column entity number]
 		# 0=user, 1=item, 2=userFeat, 3=itemFeat
 
-		modes = ['sparse', 'log_dense', 'log_dense']
+		modes = ['sparse', feature_mat_type, feature_mat_type]
 		# modes of each relation: sparse, dense or log_dense
 	    # dense if Wij = 1 for all ij 
 	    # sparse if Wij = 1 if Xij>0
 	    # log if link function = logistic
 
 	elif user == '' and item != '':
-		X_itemFeat = loadTripleData(item, num_item, 0)
-
 		Xs_trn = [X_train, X_itemFeat]
 		Xs_tst = [X_test, None]
 
@@ -84,11 +86,9 @@ def read_triple_data(train, test, user, item):
 		# [row entity number, column entity number]
 		# 0=user, 1=item, 2=itemFeat
 
-		modes = ['sparse', 'log_dense']
+		modes = ['sparse', feature_mat_type]
 
 	elif user != '' and item == '':
-		X_userFeat = loadTripleData(user, num_user, 0)
-
 		Xs_trn = [X_train, X_userFeat]
 		Xs_tst = [X_test, None]
 
@@ -96,16 +96,17 @@ def read_triple_data(train, test, user, item):
 		# [row entity number, column entity number]
 		# 0=user, 1=item, 2=userFeat
 
-		modes = ['sparse', 'log_dense']
+		modes = ['sparse', feature_mat_type]
 
 	elif user == '' and item == '':
-		assert False, "No user and item features. Please use LibMF."
+		assert False, 'No user and item features.'
 
 	return [Xs_trn, Xs_tst, rc_schema, modes] 
 
 def get_config(Xs, rc_schema):
     '''
     get neccessary configurations of the given relation
+    ---------------------
     S = number of entity
     Ns = number of instances for each entity
     '''
@@ -165,6 +166,8 @@ def save_result(args, rmse):
 		cmf_type = 'item'
 	elif args.user != '' and args.item == '':
 		cmf_type = 'user'
+	elif args.user == '' and args.item == '':
+		cmf_type = 'none'
 
 	if args.out != '':
 		if os.path.exists(args.out) == True:

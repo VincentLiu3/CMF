@@ -1,27 +1,22 @@
 # Collective Matrix Factorization
-This is an implmentation of Collective Matrix Factorization using Newton methond.
+This is an implmentation of Collective Matrix Factorization using Newton's method.
 
 # Data Format
-In RecSys, each dataset usually has three relations (rating data, user features and item features). Each relation is stored as a matrix in coordinate format. That is, it has three columns: row, col, value. 
+In this model, each relation is stored as a matrix in coordinate format. 
 ```
-3944,2641,2
-4644,2015,3
-1119,1980,4
+row,col,value
+394,264,2
+464,201,3
+111,198,4
 ```
 
 # Quick Usage
 ```
-$ python3 cmf.py --out both.txt --alphas '0.8-0.1-0.1' --k 10 --reg 0.1 --lr 0.1 --tol 1.0 --verbose 1
+$ python cmf.py --train data/yelp/train.txt --test data/yelp/test.txt --user data/yelp/user.txt --item data/yelp/item.txt --out yelp.txt --alphas '0.6-0.2-0.2' --k 10 --reg 0.1 --lr 0.1 --tol 1 --verbose 1
 ```
-You can type **$ python3 cmf.py --help** for more details about the parameters.  
-
-# Grid Search
-Write parameters you would like to search in 'cmf.sh', and run the command below.
-```
-$ nohup ./cmf.sh &
-```
+You can type **$ python cmf.py --help** for more details about the parameters.  
 
 # Reference 
 ```
-* Singh, Ajit P., and Geoffrey J. Gordon. Relational learning via collective matrix factorization. Proceedings of the 14th ACM SIGKDD international conference on Knowledge discovery and data mining. ACM, 2008.
+Singh, Ajit P., and Geoffrey J. Gordon. Relational learning via collective matrix factorization. Proceedings of the 14th ACM SIGKDD international conference on Knowledge discovery and data mining. ACM, 2008.
 ```

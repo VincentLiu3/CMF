@@ -2,7 +2,7 @@ import numpy
 import time
 import scipy.sparse
 import argparse
-from anewton import logistic, newton_update
+from anewton import *
 from utils import *
 
 def parse_args():
@@ -13,13 +13,15 @@ def parse_args():
     parser.add_argument('--item' , type = str, default = '', help = 'Item features')
     parser.add_argument('--out', type = str, default = '', help = 'File where fianl result will be saved')
 
+    parser.add_argument('--link' , type = str, default = 'dense', help = 'dense or log_dense')
+
     parser.add_argument('--alphas' , type = str, default = '0.4-0.3-0.3', help = 'Alpha in [0, 1] weights the relative importance of relations')
-    parser.add_argument('--k', type = int, default = 10, help = 'Dimension of latent fectors')
+    parser.add_argument('--k', type = int, default = 8, help = 'Dimension of latent fectors')
     parser.add_argument('--reg', type = float, default = 0.1, help = 'Regularization for latent facotrs')
     parser.add_argument('--lr', type = float, default = 0.1, help = 'Initial learning rate for training')
 
-    parser.add_argument('--max_iter', type = int, default = 100, help = 'Max training iteration')
-    parser.add_argument('--tol', type = float, default = 0.5, help = 'Tolerant for change in training loss')
+    parser.add_argument('--iter', type = int, default = 100, help = 'Max training iteration')
+    parser.add_argument('--tol', type = float, default = 0, help = 'Tolerant for change in training loss')
     parser.add_argument('--verbose', type = int, default = 1, help = 'Verbose or not')
     return parser.parse_args()
 
@@ -52,6 +54,7 @@ def learn(Xs, Xstst, rc_schema, modes, alphas, K, reg, learn_rate, max_iter, tol
         # training 
         tic = time.time()
         for t in range(S):
+            # update factors for entity t
             newton_update(Us, Xs, Xts, rc_schema, alphas, modes, K, reg, learn_rate, Ns, t)
         
         # evaluation
@@ -60,15 +63,14 @@ def learn(Xs, Xstst, rc_schema, modes, alphas, K, reg, learn_rate, max_iter, tol
         prev_loss = training_loss
 
         if verbose == 1:
-            # Ystst = predict(Us, Xstst, rc_schema, modes)
-            # testing_loss = RMSE(Xstst[0], Ystst[0])
+            Ystst = predict(Us, Xstst, rc_schema, modes)
+            testing_loss = RMSE(Xstst[0], Ystst[0])
             toc = time.time()
-            print("[CMF] Iteration {}/{}. Time: {:.1f}".format(i, max_iter, toc - tic))
-            print("[CMF] Training Loss: {:.2f} (change {:.2f}%)".format(training_loss, change_rate))
-            # print("[CMF] Testing RMSE: {:.2f}".format(testing_loss))
-            
+            print("[CMF] {}/{}. Time: {:.1f}".format(i, max_iter, toc - tic))
+            print("[CMF] Training Loss: {:.2f} (change {:.2f}%). Testing RMSE: {:.2f}".format(training_loss, change_rate, testing_loss))
+        
         # early stop
-        if change_rate < tol and i != 1:
+        if tol!=0 and i!=1 and change_rate<tol:
             break
 
     return Us
@@ -96,9 +98,11 @@ def loss(Us, Xs, rc_schema, modes, alphas, reg=0):
 		if Xs[j] is None or Ys[j] is None or alpha_j == 0:
 			continue
 
-		X = scipy.sparse.csc_matrix(Xs[j])
-		Y = scipy.sparse.csc_matrix(Ys[j])
-
+		# X = scipy.sparse.csc_matrix(Xs[j])
+		# Y = scipy.sparse.csc_matrix(Ys[j])
+		X = Xs[j]
+		Y = Ys[j]
+		
 		if modes[j] == 'sparse':
 			assert( X.size == Y.size )
 			res += alpha_j * numpy.sum(pow(X.data - Y.data, 2))
@@ -122,12 +126,12 @@ def predict(Us, Xs, rc_schema, modes):
             continue
         
         X = Xs[i]
-        U = Us[rc_schema[i, 0]] 
+        U = Us[rc_schema[i, 0]]
         V = Us[rc_schema[i, 1]]
 
         if modes[i] == 'sparse':
             # predict only for non-zero elements in X
-            X = scipy.sparse.csc_matrix(X)
+            # X = scipy.sparse.csc_matrix(X)
             data = X.data.copy()
             indices = X.indices.copy()
             indptr = X.indptr.copy()
@@ -163,16 +167,15 @@ def run_cmf(Xs_trn, Xs_tst, rc_schema, modes, args):
     alphas = string2list(args.alphas, len(modes))
 
     if args.verbose == 1:
+    	print('[Results] k = {}. reg = {}. lr = {}. alpha = {}. modes = {}'.format(args.k, args.reg, args.lr, alphas, modes))
         start_time = time.time()
-        print('[Settings] k = {}. reg = {}. lr = {}. alpha = {}'.format(args.k, args.reg, args.lr, alphas))
 
-    Us = learn(Xs_trn, Xs_tst, rc_schema, modes, alphas, args.k, args.reg, args.lr, args.max_iter, args.tol, args.verbose)
+    Us = learn(Xs_trn, Xs_tst, rc_schema, modes, alphas, args.k, args.reg, args.lr, args.iter, args.tol, args.verbose)
     Ys_tst = predict(Us, Xs_tst, rc_schema, modes)
     rmse = RMSE(Xs_tst[0], Ys_tst[0])
 
     if args.verbose == 1:
         end_time = time.time()
-        print('[Results] k = {}. reg = {}. lr = {}. alpha = {}'.format(args.k, args.reg, args.lr, alphas))
         print('[Results] RMSE = {:.4f}'.format(rmse))
         print('[Results] Total Running Time: {:.0f} s'.format(end_time - start_time) )
 
@@ -181,7 +184,7 @@ def run_cmf(Xs_trn, Xs_tst, rc_schema, modes, args):
 
 if __name__ == "__main__":
     args = parse_args()
-    [Xs_trn, Xs_tst, rc_schema, modes] = read_triple_data(args.train, args.test, args.user, args.item)
+    [Xs_trn, Xs_tst, rc_schema, modes] = read_triple_data(args.train, args.test, args.user, args.item, args.link)
 
     if args.verbose == 1: 
         [S, Ns] = get_config(Xs_trn, rc_schema)
