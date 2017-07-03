@@ -43,6 +43,7 @@ def read_triple_data(train, test, user, item, feature_mat_type):
 	'''
 	read data from three column format (row, column, value)
 	'''
+	assert( feature_mat_type in ['sparse', 'dense', 'log_dense'] ), 'Unrecognized link function'
 
 	# need to make sure training & testing data with the same shapes as user and item features
 	num_user = num_item = 0
@@ -82,24 +83,23 @@ def read_triple_data(train, test, user, item, feature_mat_type):
 		Xs_trn = [X_train, X_itemFeat]
 		Xs_tst = [X_test, None]
 
-		rc_schema = numpy.array([[0, 1], [1, 2]])
-		# [row entity number, column entity number]
-		# 0=user, 1=item, 2=itemFeat
-
+		rc_schema = numpy.array([[0, 1], [1, 2]]) # 0=user, 1=item, 2=itemFeat
 		modes = ['sparse', feature_mat_type]
 
 	elif user != '' and item == '':
 		Xs_trn = [X_train, X_userFeat]
 		Xs_tst = [X_test, None]
 
-		rc_schema = numpy.array([[0, 1], [0, 2]])
-		# [row entity number, column entity number]
-		# 0=user, 1=item, 2=userFeat
-
+		rc_schema = numpy.array([[0, 1], [0, 2]]) # 0=user, 1=item, 2=userFeat
 		modes = ['sparse', feature_mat_type]
 
 	elif user == '' and item == '':
 		assert False, 'No user and item features.'
+		Xs_trn = [X_train]
+		Xs_tst = [X_test]
+
+		rc_schema = numpy.array([[0, 1]])
+		modes = ['sparse']
 
 	return [Xs_trn, Xs_tst, rc_schema, modes] 
 
@@ -136,23 +136,17 @@ def RMSE(X, Y):
 	X is prediction, Y is ground truth
 	Both X and Y should be scipy.sparse.csc_matrix
 	'''
-	assert(X.size == Y.size and all(X.indices == Y.indices) and all(X.indptr == Y.indptr))
-	if X.size > 0:
-		return numpy.sqrt(sum(pow(X.data - Y.data, 2)) / X.size)
-	else:
-		return 0
+	assert(X.size == Y.size and all(X.indices == Y.indices) and all(X.indptr == Y.indptr) and X.size > 0)
+	return numpy.sqrt(sum(pow(X.data - Y.data, 2)) / X.size)
 	
 def MAE(X, Y):
-	assert(X.size == Y.size and all(X.indices == Y.indices) and all(X.indptr == Y.indptr))
-	if X.size > 0:
-		return sum(abs(X.data - Y.data)) / X.size
-	else:
-		return 0
+	assert(X.size == Y.size and all(X.indices == Y.indices) and all(X.indptr == Y.indptr) and X.size > 0)
+	return sum(abs(X.data - Y.data)) / X.size
 
 def check_modes(modes):
 	for mode in modes:
 		if mode != 'sparse' and mode != 'dense' and mode != 'log_dense':
-			assert False, "Unrecognized mode: {}".format(mode)
+			assert False, 'Unrecognized mode: {}'.format(mode)
 
 def string2list(input_string, num, sep='-'):
 	string_list = input_string.split(sep)
@@ -170,10 +164,10 @@ def save_result(args, rmse):
 		cmf_type = 'none'
 
 	if args.out != '':
-		if os.path.exists(args.out) == True:
-			with open(args.out, 'a') as fp:
-				fp.write('{},{},{},{},{},{},{:.4f}\n'.format(cmf_type, args.k, args.reg, args.lr, args.tol, args.alphas, rmse))
-		else:
+		if os.path.exists(args.out) is False:
 			with open(args.out, 'w') as fp:
 				fp.write('type,k,reg,lr,tol,alphas,RMSE\n')
-				fp.write('{},{},{},{},{},{},{:.4f}\n'.format(cmf_type, args.k, args.reg, args.lr, args.tol, args.alphas, rmse))
+
+		with open(args.out, 'a') as fp:
+			fp.write('{},{},{},{},{},{},{:.4f}\n'.format(cmf_type, args.k, args.reg, args.lr, args.tol, args.alphas, rmse))
+	

@@ -1,8 +1,8 @@
 # Collective Matrix Factorization
-This is an implmentation of Collective Matrix Factorization using Newton's method.
+This is a python implmentation of Collective Matrix Factorization using Newton's method.
 
-# Data Format
-In this model, each relation is stored as a matrix in coordinate format. 
+# Input Data Format
+In this model, each relation is stored as a matrix in coordinate format. There are some examples in **data/**.
 ```
 row,col,value
 394,264,2
@@ -12,11 +12,11 @@ row,col,value
 
 # Quick Usage
 ```
-$ python cmf.py --train data/yelp/train.txt --test data/yelp/test.txt --user data/yelp/user.txt --item data/yelp/item.txt --out yelp.txt --alphas '0.6-0.2-0.2' --k 10 --reg 0.1 --lr 0.1 --tol 1 --verbose 1
+$ python cmf.py --train data/ml-1m/train.txt --test data/ml-1m/test.txt --user data/ml-1m/user.txt --item data/ml-1m/item.txt --out ml-1m.txt --alphas '0.8-0.1-0.1' --link log_dense --k 16 --reg 0.1 --lr 0.1 --tol 1 --verbose 1
 ```
-You can type **$ python cmf.py --help** for more details about the parameters.  
+You can type **python cmf.py --help** for more details about the parameters.  
 
 # Reference 
 ```
-Singh, Ajit P., and Geoffrey J. Gordon. Relational learning via collective matrix factorization. Proceedings of the 14th ACM SIGKDD international conference on Knowledge discovery and data mining. ACM, 2008.
+* Singh, Ajit P., and Geoffrey J. Gordon. Relational learning via collective matrix factorization. Proceedings of the 14th ACM SIGKDD international conference on Knowledge discovery and data mining. ACM, 2008.
 ```
