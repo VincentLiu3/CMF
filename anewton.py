@@ -3,7 +3,7 @@ from functools import reduce
 # import scipy
 
 def logistic(vec):
-	out_vec = 1.0 / (1 + numpy.exp(-1 * vec))
+	out_vec = 1.0 / (1.0 + numpy.exp(-1 * vec))
 	return out_vec
 
 def d_logistic(vec):
@@ -11,12 +11,12 @@ def d_logistic(vec):
 	out_vec = numpy.multiply(log_vec, 1-log_vec)
 	return out_vec
 
+'''
 def loss_for_one_row(Xi, U, V, reg):
 	Yi = numpy.dot(U, V.T)
 	loss = sum( pow( Xi-Yi, 2) ) + reg * numpy.linalg.norm(U) / 2
 	return loss
 
-'''
 def Armijo_line_search(U, one_step, Xi, V, reg):
 	prev_loss = 
 	while True:
@@ -44,7 +44,7 @@ def newton_update(Us, Xs, Xts, rc_schema, alphas, modes, K, reg, learn_rate, Ns,
 				# only need to update if type t is in relation j
 				if rc_schema[j, 0] == t:
 					# if type t = x-axis of relation j 
-					X = Xts[j]
+					X = Xts[j] # transpose X (n2, n1)
 					U = U_t[i, :] # (1 * k)
 					V = Us[rc_schema[j, 1]]  # (n2 * k)
 				
@@ -52,7 +52,7 @@ def newton_update(Us, Xs, Xts, rc_schema, alphas, modes, K, reg, learn_rate, Ns,
 					indptr = X.indptr 
 					indices = X.indices 
 
-					ind_i0, ind_i1 = (indptr[i], indptr[i+1])
+					ind_i0, ind_i1 = (indptr[i], indptr[i+1]) 
 					# Step 1: XiV
 					if ind_i0 == ind_i1:
 						if modes[j] == "sparse": # sparse -> no data on the i-th row of X -> no need to update
@@ -60,29 +60,27 @@ def newton_update(Us, Xs, Xts, rc_schema, alphas, modes, K, reg, learn_rate, Ns,
 						else: # dense -> 0 vector
 						 	XiV = numpy.zeros(K) # (1 * k)
 					else:
-						inds_i = indices[ind_i0:ind_i1] 
-						data_i = data[ind_i0:ind_i1] # non-zero element on the j-th row of X (1 * x)
+						inds_i = indices[ind_i0:ind_i1] # index to the non-zero elements on the i-th row of X
+						data_i = data[ind_i0:ind_i1] # non-zero element on the i-th row of X (1 * x)
 						XiV = numpy.dot(data_i, V[inds_i, :]) # (1 * x) (x * k) -> (1 * k)
 	
 					if modes[j] == "sparse":
 						V = V[inds_i, :] # only need those column factors for non-zero element in the i-th row
 
 					# Step 2: UVt
-					UVt = numpy.dot(U, V.T) # (1 * n2)
+					UiVt = numpy.dot(U, V.T) # (1*k) (k*n2) -> (1 * n2) or (1 * x)
 
 					if modes[j] == 'log_dense':
 						# Step 3: UVtV
-						UVtV = numpy.dot(logistic(UVt), V) # (1 * k)
-
+						UiVtV = numpy.dot(logistic(UiVt), V) # (1 * k)
 						# Step 4: VtDiV
-						Hes = numpy.dot(numpy.multiply(V.T, d_logistic(UVt)), V)
+						Hes = numpy.dot(numpy.multiply(V.T, d_logistic(UiVt)), V)
 					else:
-						UVtV = numpy.dot(UVt, V)  # (1 * k)
-
-						Hes = numpy.dot(numpy.multiply(V.T, UVt), V)
+						UiVtV = numpy.dot(UiVt, V)  # (1 * k)
+						Hes = numpy.dot(numpy.multiply(V.T, UiVt), V)
 
 					A += alphas[j] * Hes
-					b += alphas[j] * (UVtV - XiV)
+					b += alphas[j] * (UiVtV - XiV)
 
 				elif rc_schema[j, 1] == t:
 					# if type t = x-axis of relation j 
@@ -102,21 +100,19 @@ def newton_update(Us, Xs, Xts, rc_schema, alphas, modes, K, reg, learn_rate, Ns,
 							XiU = numpy.zeros(K) # (1 * k)
 					else:
 						inds_i = indices[ind_i0:ind_i1] 
-						data_i = data[ind_i0:ind_i1] # value on the j-th column of X (1 * x)
+						data_i = data[ind_i0:ind_i1] # non-zero elements on the j-th column of X (1 * x)
 						XiU = numpy.dot(data_i, U[inds_i, :]) # (1 * k)
 
 					if modes[j] == "sparse":
-						U = U[inds_i, :]
+						U = U[inds_i, :] # (x * k)
 
-					UVt = numpy.dot(U, V.T)
+					UVt = numpy.dot(U, V.T) # (x * k) (k * 1) -> (x * 1)
 
 					if modes[j] == 'log_dense':
 						UVtU = numpy.dot(logistic(UVt).T, U) # (1 * k)
-
 						Hes = numpy.dot(numpy.multiply(U.T, d_logistic(UVt)), U)
 					else:
 						UVtU = numpy.dot(UVt.T, U) # (1 * k)
-
 						Hes = numpy.dot(numpy.multiply(U.T, UVt), U)
 
 					A += alphas[j] * Hes
@@ -126,14 +122,15 @@ def newton_update(Us, Xs, Xts, rc_schema, alphas, modes, K, reg, learn_rate, Ns,
 		A += reg * numpy.eye(K, K)
 		b += reg * U_t[i, :].copy() # the previous factor for i-th data
 
-		# A = [q'(Ui)]^-1, b = q(Ui)
-		# Ui <- Ui - learn_rate * b A^-1
 		d = numpy.dot(b, numpy.linalg.inv(A))
 		Us[t][i, :] -= learn_rate * d  
 
 	# return change
 
 def old_newton_update(Us, Xs, Xts, rc_schema, alphas, modes, K, reg, learn_rate, Ns, t):
+	'''
+	code from http://ihome.ust.hk/~zluab/code/
+	'''
 	assert(t <= len(Ns) and t >= 0)
 	eyeK = reg * numpy.eye(K, K)
 	N = Ns[t] # number of instances for type t
@@ -142,17 +139,17 @@ def old_newton_update(Us, Xs, Xts, rc_schema, alphas, modes, K, reg, learn_rate,
 	b = numpy.zeros(K) # place holders for gradient
 	UtUs = numpy.empty(len(Xs),object)
 	# change = 0
-	for j in xrange(len(Xs)):
+	for j in range(len(Xs)):
 		if modes[j] == 'dense':
 			if rc_schema[j, 0] == t:		
 				U = Us[rc_schema[j, 1]]
 			else:
 				U = Us[rc_schema[j, 0]] 
-			UtUs[j] = numpy.dot(U.T,U)
-	for i in xrange(N):
+			UtUs[j] = numpy.dot(U.T,U) # UtUs = VtV
+	for i in range(N):
 		A[:] = 0
 		b[:] = 0
-		for j in xrange(len(Xs)):
+		for j in range(len(Xs)):
 			if alphas[j] == 0:
 				continue
 			if rc_schema[j, 0] == t or rc_schema[j, 1] == t:

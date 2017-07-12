@@ -2,42 +2,16 @@ import numpy
 import scipy.sparse
 import os.path
 
-def read_data(dataset_name):
-	X_train = loadData('data/%s/train.txt' % (dataset_name))
-	X_userFeat = loadData('data/%s/user.txt' % (dataset_name))
-	X_itemFeat = loadData('data/%s/item.txt' % (dataset_name))
-	X_test = loadData('data/%s/test.txt' % (dataset_name))
-
-	Xs_trn = [X_train, X_userFeat, X_itemFeat]
-	Xs_tst = [X_test, None, None]
-
-	return [Xs_trn, Xs_tst]
-
-def loadData(filename):
-	fData = numpy.loadtxt(filename, delimiter = ',')
-	return(fData)
+def read_dense_data(train_file, test_file, user_file, item_file, feature_mat_type):
+	return 
 
 def loadTripleData(filename):
 	'''
 	laod triple data (row, column, value) to csc_matrix format
 	'''
-	fData = numpy.loadtxt(filename, delimiter=',')
-	fData = fData.T
-	fData = scipy.sparse.coo_matrix((fData[2],(fData[0],fData[1])))
-	fData = scipy.sparse.csc_matrix(fData)
+	fData = numpy.loadtxt(filename, delimiter=',').T
+	fData = scipy.sparse.coo_matrix((fData[2],(fData[0],fData[1]))).tocsc()
 	return(fData)
-
-'''
-def loadTripleData(filename, nrow=0, ncol=0):
-	fData = numpy.loadtxt(filename, delimiter=',')
-	fData = fData.T
-
-	num_row = max(int(fData[0].max())+1, nrow)
-	num_col = max(int(fData[1].max())+1, ncol)
-	fData = scipy.sparse.coo_matrix((fData[2],(fData[0],fData[1])), shape=(num_row, num_col))
-	fData = scipy.sparse.csc_matrix(fData)
-	return(fData)
-'''
 
 def read_triple_data(train, test, user, item, feature_mat_type):
 	'''
@@ -46,7 +20,7 @@ def read_triple_data(train, test, user, item, feature_mat_type):
 	assert( feature_mat_type in ['sparse', 'dense', 'log_dense'] ), 'Unrecognized link function'
 
 	# need to make sure training & testing data with the same shapes as user and item features
-	num_user = num_item = 0
+	num_user = num_item = 0	
 	if user != '':
 		X_userFeat = loadTripleData(user)
 		num_user = X_userFeat.shape[0]
@@ -54,15 +28,15 @@ def read_triple_data(train, test, user, item, feature_mat_type):
 		X_itemFeat = loadTripleData(item)
 		num_item = X_itemFeat.shape[0]
 
-	Dtrain = loadData(train).T
-	Dtest = loadData(test).T
+	Dtrain = numpy.loadtxt(train, delimiter = ',').T
+	Dtest = numpy.loadtxt(test, delimiter = ',').T
 	num_user = int( max(Dtrain[0].max(), Dtest[0].max(), num_user-1) ) + 1
 	num_item = int( max(Dtrain[1].max(), Dtest[1].max(), num_item-1) ) + 1
-	X_train = scipy.sparse.coo_matrix((Dtrain[2],(Dtrain[0],Dtrain[1])), shape=(num_user, num_item))
-	X_test = scipy.sparse.coo_matrix((Dtest[2],(Dtest[0],Dtest[1])), shape=(num_user, num_item))
+	X_train = scipy.sparse.coo_matrix((Dtrain[2],(Dtrain[0],Dtrain[1])), shape=(num_user, num_item)).tocsc()
+	X_test = scipy.sparse.coo_matrix((Dtest[2],(Dtest[0],Dtest[1])), shape=(num_user, num_item)).tocsc()
 	# transform to csc format
-	X_train = scipy.sparse.csc_matrix(X_train)
-	X_test = scipy.sparse.csc_matrix(X_test)
+	# X_train = scipy.sparse.csc_matrix(X_train)
+	# X_test = scipy.sparse.csc_matrix(X_test)
 
 	# user or item features
 	if user != '' and item != '':
@@ -167,7 +141,6 @@ def save_result(args, rmse):
 		if os.path.exists(args.out) is False:
 			with open(args.out, 'w') as fp:
 				fp.write('type,k,reg,lr,tol,alphas,RMSE\n')
-
 		with open(args.out, 'a') as fp:
 			fp.write('{},{},{},{},{},{},{:.4f}\n'.format(cmf_type, args.k, args.reg, args.lr, args.tol, args.alphas, rmse))
 	

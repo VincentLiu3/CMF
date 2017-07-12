@@ -46,9 +46,9 @@ def learn(Xs, Xstst, rc_schema, modes, alphas, K, reg, learn_rate, max_iter, tol
     # randomly initialize factor matrices with small values
     Us = [None] * S
     for i in range(S):
-        Us[i] = numpy.random.rand(Ns[i], K) / numpy.sqrt(K)
+        Us[i] = numpy.random.rand(Ns[i], K) * 5 / K # so initial prediction will be in [0, 5]
 
-    prev_loss = loss(Us, Xs, rc_schema, modes, alphas, reg)
+    prev_loss = loss(Us, Xs, rc_schema, modes, alphas, reg, S)
     i = 0
     while i < max_iter:
         i += 1
@@ -59,7 +59,7 @@ def learn(Xs, Xstst, rc_schema, modes, alphas, K, reg, learn_rate, max_iter, tol
             newton_update(Us, Xs, Xts, rc_schema, alphas, modes, K, reg, learn_rate, Ns, t)
         
         # evaluation
-        training_loss = loss(Us, Xs, rc_schema, modes, alphas, reg)
+        training_loss = loss(Us, Xs, rc_schema, modes, alphas, reg, S)
         change_rate = (training_loss-prev_loss)/prev_loss * 100
         prev_loss = training_loss
 
@@ -76,7 +76,7 @@ def learn(Xs, Xstst, rc_schema, modes, alphas, K, reg, learn_rate, max_iter, tol
 
     return Us
 
-def loss(Us, Xs, rc_schema, modes, alphas, reg=0):
+def loss(Us, Xs, rc_schema, modes, alphas, reg, num_entities):
 	'''
 	Calculate objective loss
 	See page 4: Generalizing to Arbitrary Schemas
@@ -88,10 +88,10 @@ def loss(Us, Xs, rc_schema, modes, alphas, reg=0):
 	res = 0
 	num_relation = len(Xs)
 	# computing regularization for each latent factor
-	for i in range(num_relation):
+	for i in range(num_entities):
 		for j in range(num_relation):
 			if rc_schema[j, 0]==i or rc_schema[j, 1]==i:
-				res += alphas[j] * reg * numpy.linalg.norm(Us[i].flat) # l2 norm
+				res += alphas[j] * reg * numpy.linalg.norm(Us[i].flat) / 2 # l2 norm
 
 	# computing loss for each relation
 	for j in range(num_relation):     
@@ -164,7 +164,7 @@ def predict(Us, Xs, rc_schema, modes):
 
 def run_cmf(Xs_trn, Xs_tst, rc_schema, modes, alphas, args):
     '''
-    run cmf and return rmse
+    run cmf
     '''
     start_time = time.time()
 
@@ -195,7 +195,7 @@ if __name__ == "__main__":
 	alphas = string2list(args.alphas, len(modes))
 
 	logger.info('------------------- CMF -------------------')
-	logger.info('Data: Number of instnace for each entity = {}'.format(Ns))
+	logger.info('Data: Number of instnace for each entity = {}'.format(list(Ns)))
 	logger.info('Data: Training size = {}. Testing size = {}'.format(Xs_trn[0].size, Xs_tst[0].size))
 	logger.info('Settings: k = {}. reg = {}. lr = {}. alpha = {}. modes = {}.'.format(args.k, args.reg, args.lr, alphas, modes))
 
