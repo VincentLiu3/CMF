@@ -1,6 +1,5 @@
 import numpy
 from functools import reduce
-# import scipy
 
 def logistic(vec):
 	out_vec = 1.0 / (1.0 + numpy.exp(-1 * vec))
@@ -57,7 +56,7 @@ def newton_update(Us, Xs, Xts, rc_schema, alphas, modes, K, reg, learn_rate, Ns,
 					if ind_i0 == ind_i1:
 						if modes[j] == "sparse": # sparse -> no data on the i-th row of X -> no need to update
 							continue
-						else: # dense -> 0 vector
+						else: # dense/log_dense -> 0 vector
 						 	XiV = numpy.zeros(K) # (1 * k)
 					else:
 						inds_i = indices[ind_i0:ind_i1] # index to the non-zero elements on the i-th row of X
@@ -66,16 +65,20 @@ def newton_update(Us, Xs, Xts, rc_schema, alphas, modes, K, reg, learn_rate, Ns,
 	
 					if modes[j] == "sparse":
 						V = V[inds_i, :] # only need those column factors for non-zero element in the i-th row
-
-					# Step 2: UVt
-					UiVt = numpy.dot(U, V.T) # (1*k) (k*n2) -> (1 * n2) or (1 * x)
-
-					if modes[j] == 'log_dense':
+						# Step 2: UVt
+						UiVt = numpy.dot(U, V.T) # (1*k) (k*n2) -> (1 * x)
 						# Step 3: UVtV
-						UiVtV = numpy.dot(logistic(UiVt), V) # (1 * k)
+						UiVtV = numpy.dot(UiVt, V)  # (1 * k)
 						# Step 4: VtDiV
+						Hes = numpy.dot(numpy.multiply(V.T, UiVt), V)
+
+					elif modes[j] == 'log_dense':
+						UiVt = numpy.dot(U, V.T) # (1 * n2)
+						UiVtV = numpy.dot(logistic(UiVt), V) # (1 * k)
 						Hes = numpy.dot(numpy.multiply(V.T, d_logistic(UiVt)), V)
-					else:
+					
+					elif modes[j] == 'dense':
+						UiVt = numpy.dot(U, V.T) # (1 * n2)
 						UiVtV = numpy.dot(UiVt, V)  # (1 * k)
 						Hes = numpy.dot(numpy.multiply(V.T, UiVt), V)
 
@@ -105,19 +108,26 @@ def newton_update(Us, Xs, Xts, rc_schema, alphas, modes, K, reg, learn_rate, Ns,
 
 					if modes[j] == "sparse":
 						U = U[inds_i, :] # (x * k)
+						UVt = numpy.dot(U, V.T) # (x * k) (k * 1) -> (x * 1)
+						UVtU = numpy.dot(UVt.T, U) # (1 * k)
+						Hes = numpy.dot(numpy.multiply(U.T, UVt), U)
 
-					UVt = numpy.dot(U, V.T) # (x * k) (k * 1) -> (x * 1)
-
-					if modes[j] == 'log_dense':
+					elif modes[j] == 'log_dense':
+						UVt = numpy.dot(U, V.T) # (x * k) (k * 1) -> (x * 1)
 						UVtU = numpy.dot(logistic(UVt).T, U) # (1 * k)
 						Hes = numpy.dot(numpy.multiply(U.T, d_logistic(UVt)), U)
-					else:
+
+					elif modes[j] == 'dense':
+						UVt = numpy.dot(U, V.T) # (x * k) (k * 1) -> (x * 1)
 						UVtU = numpy.dot(UVt.T, U) # (1 * k)
 						Hes = numpy.dot(numpy.multiply(U.T, UVt), U)
 
 					A += alphas[j] * Hes
 					b += alphas[j] * (UVtU - XiU)
-				
+			
+		if numpy.all(b == 0):
+			continue
+			
 		# regularizer
 		A += reg * numpy.eye(K, K)
 		b += reg * U_t[i, :].copy() # the previous factor for i-th data

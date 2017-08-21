@@ -46,9 +46,10 @@ def learn(Xs, Xstst, rc_schema, modes, alphas, K, reg, learn_rate, max_iter, tol
     # randomly initialize factor matrices with small values
     Us = [None] * S
     for i in range(S):
-        Us[i] = numpy.random.rand(Ns[i], K) * 5 / K # so initial prediction will be in [0, 5]
+        Us[i] = numpy.random.rand(Ns[i], K) * numpy.sqrt(1/K)  # so initial prediction will be in [0, 5]
 
-    prev_loss = loss(Us, Xs, rc_schema, modes, alphas, reg, S)
+    Ys = predict(Us, Xs, rc_schema, modes)
+    prev_loss = loss(Us, Xs, Ys, rc_schema, modes, alphas, reg, S)
     i = 0
     while i < max_iter:
         i += 1
@@ -59,16 +60,18 @@ def learn(Xs, Xstst, rc_schema, modes, alphas, K, reg, learn_rate, max_iter, tol
             newton_update(Us, Xs, Xts, rc_schema, alphas, modes, K, reg, learn_rate, Ns, t)
         
         # evaluation
-        training_loss = loss(Us, Xs, rc_schema, modes, alphas, reg, S)
+        Ys = predict(Us, Xs, rc_schema, modes)
+        training_loss = loss(Us, Xs, Ys, rc_schema, modes, alphas, reg, S)
+        train_rmse = RMSE(Xs[0], Ys[0])
         change_rate = (training_loss-prev_loss)/prev_loss * 100
         prev_loss = training_loss
-
+        
         Ystst = predict(Us, Xstst, rc_schema, modes)
-        testing_loss = RMSE(Xstst[0], Ystst[0])
+        test_rmse = RMSE(Xstst[0], Ystst[0])
 
         toc = time.time()
         logger.info('Iter {}/{}. Time: {:.1f}'.format(i, max_iter, toc - tic))
-        logger.info('Training Loss: {:.2f} (change {:.2f}%). Testing RMSE: {:.2f}'.format(training_loss, change_rate, testing_loss))
+        logger.info('Training Loss: {:.1f} (change {:.2f}%). Training RMSE: {:.2f}. Testing RMSE: {:.2f}'.format(training_loss, change_rate, train_rmse, test_rmse))
     
         # early stop
         if tol!=0 and i!=1 and change_rate > -tol :
@@ -76,15 +79,13 @@ def learn(Xs, Xstst, rc_schema, modes, alphas, K, reg, learn_rate, max_iter, tol
 
     return Us
 
-def loss(Us, Xs, rc_schema, modes, alphas, reg, num_entities):
+def loss(Us, Xs, Ys, rc_schema, modes, alphas, reg, num_entities):
 	'''
 	Calculate objective loss
 	See page 4: Generalizing to Arbitrary Schemas
 	'''
 	assert(rc_schema.shape[0] == len(Xs) and rc_schema.shape[1] == 2)
 
-	Ys = predict(Us, Xs, rc_schema, modes)
-	
 	res = 0
 	num_relation = len(Xs)
 	# computing regularization for each latent factor
