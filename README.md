@@ -1,8 +1,8 @@
 # Collective Matrix Factorization
-This is a python implmentation of Collective Matrix Factorization using Newton's method.
+This is a python implementation of Collective Matrix Factorization using Newton's method.
 
 # Input Data Format
-In this model, each relation is stored as a matrix in coordinate format. There are some examples in **data/**.
+In this code, each relation is stored as a matrix in coordinate format. There are some examples in **data/**.
 ```
 row,col,value
 394,264,2
@@ -12,9 +12,9 @@ row,col,value
 
 # Quick Usage
 ```
-$ python cmf.py --train data/ml-1m/train.txt --test data/ml-1m/test.txt --user data/ml-1m/user.txt --item data/ml-1m/item.txt --out ml-1m.txt --alphas '0.8-0.1-0.1' --link log_dense --k 16 --reg 0.1 --lr 0.1 --tol 1 --verbose 1
+$ python3 cmf.py --train data/ml-1m/train.txt --test data/ml-1m/test.txt --user data/ml-1m/user.txt --item data/ml-1m/item.txt --out ml-1m.txt --alphas '0.5-0.5-0.5' --link log_dense --k 8 --reg 0.1 --lr 0.1 --iter 50 --tol 0
 ```
-You can type **python cmf.py --help** for more details about the parameters.  
+You have to use python3 to run this code. Type **python3 cmf.py --help** for more details about the parameters.  
 
 # Reference 
 ```
